@@ -1,18 +1,15 @@
-# main.py
-
+import os
+import random
+import string
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from databases import Database
-import random
-import string
-
-# Import aiosqlite for async SQLite support
 import aiosqlite
 
 app = FastAPI()
 
-# Database URL from environment or use SQLite in-memory for demonstration
-DATABASE_URL = "sqlite:///./test.db"
+# Database URL from environment or use SQLite file for demonstration
+DATABASE_URL = os.getenv('DATABASE_URL', "sqlite:///./test.db")
 
 # Initialize databases instance
 database = Database(DATABASE_URL)
@@ -33,11 +30,11 @@ async def register(reg_request: RegisterRequest):
     # Generate OTP
     otp = generate_otp()
 
-    # Use databases library for async SQLite operations
-    async with aiosqlite.connect("test.db") as db:
+    # Use aiosqlite for async SQLite operations
+    async with aiosqlite.connect("./test.db") as db:
         # Check if mobile number already exists in the database
-        stored_otp = await db.execute("SELECT otp FROM users WHERE mobile_number=?", (mobile_number,))
-        existing_record = await stored_otp.fetchone()
+        async with db.execute("SELECT otp FROM users WHERE mobile_number=?", (mobile_number,)) as cursor:
+            existing_record = await cursor.fetchone()
 
         if existing_record:
             # If mobile number exists, update the OTP and resend
@@ -61,10 +58,10 @@ async def verify_otp(otp_verify_request: OTPVerifyRequest):
     mobile_number = otp_verify_request.mobile_number
     otp = otp_verify_request.otp
 
-    # Use databases library for async SQLite operations
-    async with aiosqlite.connect("test.db") as db:
-        stored_otp = await db.execute("SELECT otp FROM users WHERE mobile_number=?", (mobile_number,))
-        fetched_otp = await stored_otp.fetchone()
+    # Use aiosqlite for async SQLite operations
+    async with aiosqlite.connect("./test.db") as db:
+        async with db.execute("SELECT otp FROM users WHERE mobile_number=?", (mobile_number,)) as cursor:
+            fetched_otp = await cursor.fetchone()
 
         if fetched_otp and fetched_otp[0] == otp:
             return {"message": "OTP verified successfully"}
@@ -74,4 +71,4 @@ async def verify_otp(otp_verify_request: OTPVerifyRequest):
 # Entry point for the FastAPI application
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
